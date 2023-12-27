@@ -1,4 +1,4 @@
-package nogencontext
+package prik
 
 import "testing"
 
