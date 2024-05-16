@@ -8,28 +8,40 @@ import (
 type DisposeFn func()
 type Dispose func(fn DisposeFn)
 
-type Factory func() (interface{}, DisposeFn)
+type AnyFactory interface{}
+type Factory func() (AnyFactory, DisposeFn)
 type Factories map[string]Factory
 
-type ContextInterface interface {
-	Resolve(name string) (interface{}, error)
-	Dispose()
-} 
-
 type Context struct {
-	//	ContextInterface
-
 	factories Factories
 	disposables []DisposeFn
 }
 
-func (c *Context) Resolve(name string) (interface{}, error) {
-	factory, ok := c.factories[name]; if !ok {
+func Resolve[T any](ctx *Context, name string) *T {
+	_factory, ok := ctx.factories[name]; if !ok {
+		panic(fmt.Errorf("No factory found: %s", name))
+	}
+
+	value, dispose := _factory()
+
+	factory, ok := value.(T); if !ok {
+		panic(fmt.Sprintf("Failed to cast factory %s to type %T", value, *new(T)))
+	}
+
+	ctx.disposables = append(ctx.disposables, dispose)
+	return &factory
+}
+
+func ResolveOr[T any](ctx *Context, name string) (*T, error) {
+	_factory, ok := ctx.factories[name]; if !ok {
 		return nil, fmt.Errorf("No factory found: %s", name)
 	}
-	value, dispose := factory()
-	c.disposables = append(c.disposables, dispose)
-	return value, nil
+	value, dispose := _factory()
+	factory, ok := value.(T); if !ok {
+		return nil, fmt.Errorf("Failed to cast factory %s to type %T", value, *new(T))
+	}
+	ctx.disposables = append(ctx.disposables, dispose)
+	return &factory, nil
 }
 
 func (c *Context) Dispose() {
@@ -39,19 +51,19 @@ func (c *Context) Dispose() {
 func CreateContext(factories Factories) *Context {
 	return &Context{
 		factories: factories,
-		disposables: make([]DisposeFn, 0),
+		disposables: make([]DisposeFn, 0), 
 	}
 }
 
 func Shared(factory Factory) Factory {
 	var (
-		instance interface{}
+		instance AnyFactory
 		dispose DisposeFn
 		once sync.Once
 		mutex sync.Mutex
 	)
 
-	return func() (interface{}, DisposeFn) {
+	return func() (AnyFactory, DisposeFn) {
 		once.Do(func() {
 			value, disposefn := factory()
 			instance = value
@@ -64,38 +76,3 @@ func Shared(factory Factory) Factory {
 	}
 }
 
-// func Shared(factory Factory) Factory {
-// 	var (
-// 		instance interface{}
-// 		once sync.Once
-// 		mutex sync.Mutex
-// 	)
-
-// 	return func() (interface{}, error) {
-// 		once.Do(func() {
-// 			value, disposefn := factory()
-// 			instance = value
-// 		})
-// 		mutex.Lock()
-// 		defer mutex.Unlock()
-
-// 		return instance, nil
-// 	}
-// }
-
-// func make(factories Factories) Context {
-// 	disposables := map[string]DisposeFn{}
-
-// 	ctx := Context{
-// 		resolve: func(name string) (interface{}, error) {
-// 			f := factories[name]
-// 			return f(dispose DisposeFn) {
-// 				dispodisposables[name] = dispose
-// 			})
-// 			//f(
-// 		},
-// 		dispose: func() {
-// 			for x, d := range disposables { d() }
-// 		},
-// 	}
-// }
