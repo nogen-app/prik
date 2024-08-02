@@ -17,13 +17,14 @@ type Context struct {
 	disposables []DisposeFn
 }
 
-func Exec[T any](factory *Factory) (*T, DisposeFn, error) {
+func Exec[T any](factory *Factory) (T, DisposeFn, error) {
 	value, dispose := (*factory)()
 	tf, ok := value.(T); if !ok {
-		return nil, nil, fmt.Errorf("Failed to cast factory %s to type %T", value, *new(T))
+		var zero T
+		return zero, nil, fmt.Errorf("Failed to cast factory %s to type %T", value, *new(T))
 	}
 
-	return &tf, dispose, nil
+	return tf, dispose, nil
 }
 
 func Resolve[T any](ctx *Context, name string) *T {
@@ -36,7 +37,7 @@ func Resolve[T any](ctx *Context, name string) *T {
 	}
 
 	ctx.disposables = append(ctx.disposables, dispose)
-	return factory
+	return &factory
 }
 
 func ResolveOr[T any](ctx *Context, name string) (*T, error) {
@@ -49,7 +50,7 @@ func ResolveOr[T any](ctx *Context, name string) (*T, error) {
 	}
 
 	ctx.disposables = append(ctx.disposables, dispose)
-	return factory, nil
+	return &factory, nil
 }
 
 func (c *Context) Dispose() {
